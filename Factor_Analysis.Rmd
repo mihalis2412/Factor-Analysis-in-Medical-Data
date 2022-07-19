@@ -1,0 +1,442 @@
+---
+title: "Exploratory Factor Analysis"
+author: "Mihalis Galanakis"
+date: "26/2/2022"
+output: word_document
+---
+
+
+**Objective**
+```{r}
+# Objective: The data in the folder named data.txt refer to counts from different variables in a population of women, aiming to gain useful insights and explore different ways to conduct exploratory factor analysis
+```  
+**Read in the data**  
+```{r}
+data <- read.table('C:/Users/mihal/OneDrive/data.txt',sep=",")
+
+# Statistical Learning Project
+# The following Dataset involves predicting the onset of diabetes within 5 years in a women population given medical details.
+# It is a binary (2-class) classification problem. The number of observations for each class is not balanced. 
+# There are 768 observations with 8 input variables and 1 output variable. Missing values are believed to be encoded with zero values.
+# The variable names are as follows:
+
+# Number of times pregnant.
+# Plasma glucose concentration a 2 hours in an oral glucose tolerance test.
+# Diastolic blood pressure (mm Hg).
+# Triceps skinfold thickness (mm).
+# 2-Hour serum insulin (mu U/ml).
+# Body mass index (weight in kg/(height in m)^2).
+# Diabetes pedigree function.
+# Age (years).
+# Class variable (0 or 1).
+```  
+**Descriptive statistics**   
+```{r}
+str(data)
+dim(data)
+summary(data)
+colnames(data) <- c("t.pregnant","plasma","bl.press","tr.thick","serum.ins","bmi","diab","age","class")
+head(data,5)
+tail(data,5)
+
+class <- data$class
+t.pregnant <- data$t.pregnant
+
+
+expl_data <- data[,2:8] 
+# We assume that the zeros in the variable times.pregnant are not missing, hence we don't replace zeros with "NA"
+
+head(expl_data,10)
+expl_data[expl_data==0] <- NA 
+# Replace the zeros with "NA"
+
+df <- data.frame(t.pregnant,expl_data,class) 
+# Create the transformed dataframe
+head(df,5) 
+# View the first 5 obs of the df
+tail(df,5) 
+# View the last 5 obs of the df
+dim(df)
+```  
+**Since we are not interested in using an imputed dataset we omit the missing values**   
+```{r}
+newdf <- na.omit(df)
+# Create the final dataframe that doesn't include missing values!
+```  
+**Getting insights about our dataset named newdf**  
+```{r}
+head(newdf)
+str(newdf)
+summary(newdf)
+```  
+**Heatmap of the correlations of our dataset**
+```{r}
+library(corrplot)
+new.corrmatrix <- cor(newdf)
+corrplot(new.corrmatrix, method = 'number')
+```  
+
+**Normality check on dataset newdf**  
+```{r}
+library(reshape2)
+library(ggplot2)
+df1 <- melt(newdf[,-9])
+ggplot(data = df1, aes(x = value)) + 
+  stat_density() + 
+  facet_wrap(~variable, scales = "free")
+# Small multiple chart
+# Not a great picture overall as regards normality, probably a transformation would be a more appropriate choice
+```  
+**Extracting the correlations of our dataset**  
+```{r}
+cor.data <- cor(newdf[,-9])
+cor.data
+# The correlation matrix of dataset called newdf without the 9th variable, which is the class (0 refers to
+# women that won't develop diabetes, 1 refers to women that will develop diabetes)
+```  
+**Correlations check (both for partial and simple correlations)**  
+```{r}
+library(psych)
+KMO(cor.data)
+# Kaiser provided the following values for interpreting results:
+# * 0.00 to 0.49 unacceptable
+# * 0.50 to 0.59 miserable
+# * 0.60 to 0.69 mediocre
+# * 0.70 to 0.79 middling
+# * 0.80 to 0.89 meritorious
+# * 0.90 to 1.00 marvelous
+
+# KMO is a measure of sampling adequacy
+# We observe that Overall MSA is 0.62, which is mediocre to satisfactory!
+# We also notice that MSA for t.pregnant variable is 0.56, which is acceptable but we will remove this variable in order to improve the fit
+# The same applies for variable bmi since we observe that MSA for bmi is 0.58
+new.cor.data <- cor(newdf[,-c(1,6,9)])
+new.cor.data
+
+KMO(new.cor.data)
+# Slightly improved the Overall MSA, valued at 0.64, which is more decent
+
+
+cortest.bartlett(new.cor.data, n=392)
+# Bartlett’s test compares the correlation matrix to an identity matrix (a matrix filled with zeroes).
+# We observe that p_value ~= 0 hence we reject the null hypothesis
+# Thus, the correlation matrix is not equal to the idd and we can move on to the factor analysis
+```  
+
+**# Factor analysis with k=1 (one factor)**  
+```{r}
+fit <- factanal(x=newdf[,-c(1,6,9)] ,factors = 1)
+fit
+# We desire the communalities to be as high as possible (Communalities refer to the complementary of the Uniqueness)
+# thus, We want the uniqueness to be as low as possible
+# We observe that the Uniqueness in all variables other than plasma is extremely high so we gather that the 
+# percentage of the variability of the correlations (of the 6 variables) explained by the factor1 is extremely low! Indications of a poor fit!
+# The proportion of the total variance explained is 25.1%, which is extremely low. Extra indications that we need to consider more factors!
+# p_value ~= 0 hence we reject the null hypothesis, therefore the fit is definately not good!
+# Last but not least the SS loadings refer to the sum of squares of the loadings of factor 1
+```  
+**Factor analysis with k=2 (two factors)**  
+```{r}
+fit_2 <- factanal(x=newdf[,-c(1,6,9)] ,factors = 2)
+fit_2
+# We observe that the fit in this case is closer to being acceptable than before (p_value 0.0365)
+# We also observe some improvements in Uniqueness (in bl.press the greatest change!)
+# In this case the cumulative proportion of variance is equal to 39.8%, which is not great at all, yet it's better than the 25.1% we had before!
+```  
+**Factor analysis with k=3 (three factors)**  
+```{r}
+fit_3 <-  factanal(x=newdf[,-c(1,6,9)] ,factors = 3)
+fit_3
+# The last section of the function output shows the results of a hypothesis test. The null hypothesis, H0, is that 
+# the number of factors in the model, in our example 2 factors, is sufficient to capture the full dimensionality of 
+# the data set. Conventionally, we reject H0 if the p-value is less than 0.05. Such a result indicates that the 
+# number of factors is too small. In contrast, we do not reject H0 if the p-value exceeds 0.05. Such a result 
+# indicates that there are likely enough (or more than enough) factors capture the full dimensionality of the dataset
+# (Teetor 2011). The high p-value in our example above leads us to not reject the H0, and indicates that we fitted 
+# an appropriate model. This hypothesis test is available thanks to our method of estimation, maximum likelihood.
+# Notice there is no entry for certain variables. That is because R does not print loadings less than 0.1. 
+# This is meant to help us spot groups of variables.
+# Definitely not 3 factors!
+
+apply(fit_3$loadings^2,1,sum)
+# Another way to calculate the Communalities
+
+1-apply(fit_3$loadings^2,1,sum)
+# Another way to calculate the Uniqueness
+
+scores1 <- factor.scores(newdf[,-c(1,6,9)], fit)$scores
+head(scores1)
+tail(scores1)
+length(scores1)
+# As expected, 392
+```  
+**Plot of the scores using as label the class**  
+```{r}
+scores <- factanal(newdf[,-c(1,6,9)], 3,
+                   rotation="varimax",
+                   scores = "regression")
+
+fa.plot(scores$scores, labels=newdf[,-c(1,6,9)]$Class, pch=18, cex=0.3)
+```  
+**Let's try some rotations!**  
+```{r}
+# Through factor rotation, we can make the output more understandable and is usually necessary to facilitate the 
+# interpretation of factors. The aim is to find a simple solution (in other words a solution that has simple structure!) that each factor has a small number of large loadings and a large number of zero (or small) loadings
+# Note that the different rotations won't have an impact on the model fit, it is expected to remain the same!
+library(GPArotation)
+fit_4 <- fa(newdf[,-c(1,6,9)], nfactors=2, n.obs=392,rotate="quartimax")
+# Implementing the quartimax rotation with 2 factors
+fit_4
+# We observe that the cumulative percentage of the variance explained is 39%
+# What’s MR, ML, PC etc.? These are factors, and the name merely reflects the fitting method, e.g. minimum residual,
+# maximum likelihood, principal components. The default is minimum residual, so in this case MR.
+# h2: the amount of variance in the item/variable explained by the (retained) factors. It is the sum of the squared 
+# loadings, a.k.a. communality. u2: 1 - h2. residual variance, a.k.a. uniqueness
+# SS loadings: These are the eigenvalues, the sum of the squared loadings. In this case where we are using a 
+# correlation matrix, summing across all factors would equal the number of variables used in the analysis
+# The table beneath the loadings shows the proportion of variance explained by each factor. The row Cumulative Var 
+# gives the cumulative proportion of variance explained. These numbers range from 0 to 1. The row Proportion Var 
+# gives the proportion of variance explained by each factor, and the row SS loadings gives the sum of squared 
+# loadings. This is sometimes used to determine the value of a particular factor. A factor is worth keeping if the 
+# SS loading is greater than 1 (Kaiser’s rule).
+# null model: The degrees of freedom for the null model that assumes no correlation structure.
+# objective function: The value of the function that is minimized by a specific procedure.
+# model: The one you’re actually interested in. Where p = Number of items, nf = number of factors then: degrees of 
+# freedom
+fit_4$PVAL
+# p_value equal to 0.028 indicates that the fit is not good in this case either!
+
+
+fit_5 <- fa(newdf[,-c(1,6,9)], nfactors=2, n.obs=392,rotate="equamax")
+fit_5
+fit_5$PVAL
+# Same p_value as expected
+
+
+fit_6 <- fa(newdf[,-c(1,6,9)] , nfactors=2, n.obs=392,rotate="promax")
+fit_6
+fit_6$PVAL
+# Same p_value as expected
+
+
+fit_7 <- fa(newdf[,-c(1,6,9)] , nfactors=3, n.obs=392,rotate="quartimax")
+fit_7
+fit_7$PVAL
+# Definitely not 3 factors!
+```  
+
+**Screeplots**  
+```{r}
+plot(fit_7$values, type = "b", xlim = c(1, 10))
+# We construct a scree plot to aid with the selection of the number of factors. From this plot, we see that the 
+# eigenvalues drop precipitously after factor 1 (maybe even 2)
+
+
+scree(newdf[,-c(1,6,9)], pc=FALSE)
+# Second way to provide a scree plot
+# Use pc=FALSE for factor analysis
+
+
+fa.parallel(newdf[,-c(1,6,9)], fa="fa")
+# The eigenvalue method (“Kaiser’s rule”) is telling us that 3 factors may be best. Parallel analysis is revealing
+# only two factors
+```  
+
+**Interpretation of the factors**  
+```{r}
+med.data.none <- factanal(newdf[,-c(1,6,9)] , factors = 2, rotation = "none")
+med.data.varimax <- factanal(newdf[,-c(1,6,9)] , factors = 2, rotation = "varimax")
+med.data.promax <- factanal(newdf[,-c(1,6,9)] , factors = 2, rotation = "promax")
+med.data.equamax <- factanal(newdf[,-c(1,6,9)] , factors = 2, rotation = "equamax")
+# Let's get a better picture of the factors along with the 4 rotations
+
+plot(med.data.none$loadings[,1], 
+     med.data.none$loadings[,2],
+     xlab = "Factor 1", 
+     ylab = "Factor 2", 
+     ylim = c(-1,1),
+     xlim = c(-1,1),
+     main = "No rotation")
+abline(h = 0, v = 0)
+
+text(med.data.none$loadings[,1]-0.08, 
+     med.data.none$loadings[,2]+0.08,
+     colnames(newdf[,-c(1,6,9)]),
+     col="blue")
+
+
+
+
+
+plot(med.data.varimax$loadings[,1], 
+     med.data.varimax$loadings[,2],
+     xlab = "Factor 1", 
+     ylab = "Factor 2", 
+     ylim = c(-1,1),
+     xlim = c(-1,1),
+     main = "Varimax rotation")
+abline(h = 0, v = 0)
+
+text(med.data.varimax$loadings[,1]-0.08, 
+     med.data.varimax$loadings[,2]+0.08,
+     colnames(newdf[,-c(1,6,9)]),
+     col="blue")
+
+
+
+
+plot(med.data.promax$loadings[,1], 
+     med.data.promax$loadings[,2],
+     xlab = "Factor 1", 
+     ylab = "Factor 2", 
+     ylim = c(-1,1),
+     xlim = c(-1,1),
+     main = "Promax rotation")
+abline(h = 0, v = 0)
+
+text(med.data.promax$loadings[,1]-0.08, 
+     med.data.promax$loadings[,2]+0.08,
+     colnames(newdf[,-c(1,6,9)]),
+     col="blue")
+
+
+
+plot(med.data.equamax$loadings[,1], 
+     med.data.equamax$loadings[,2],
+     xlab = "Factor 1", 
+     ylab = "Factor 2",
+     ylim = c(-1,1),
+     xlim = c(-1,1),
+     main = "Equamax rotation")
+abline(h = 0, v = 0)
+
+text(med.data.equamax$loadings[,1]-0.08, 
+     med.data.equamax$loadings[,2]+0.08,
+     colnames(newdf[,-c(1,6,9)]),
+     col="blue")
+# Now comes the tricky aspect in factor analysis: Interpreting the factors themselves. If two variables both have 
+# large loadings for the same factor, then we know they have something in common. As a researcher, we have to 
+# understand the data and its meaning in order to give a name to that common ground. 
+```  
+
+**Let's try exploring different methods**  
+```{r}
+fit_8 <- fa(newdf[,-c(1,6,9)], nfactors=2, n.obs=392,rotate="quartimax",fm="ols")
+# Implementing the quartimax rotation using ols method
+fit_8
+# We observe that the results do not differ
+fit_8$PVAL
+# p_value equal to 0.028 indicates that the fit is not good in this case either!
+
+
+fit_9 <- fa(newdf[,-c(1,6,9)], nfactors=2, n.obs=392,rotate="equamax",fm="ols")
+fit_9
+fit_9$PVAL
+# Equally poor fit as the previous one, the p_value as expected is the same
+
+
+fit_10 <- fa(newdf[,-c(1,6,9)] , nfactors=2, n.obs=392,rotate="promax",fm="ols")
+fit_10
+fit_10$PVAL
+# Still not a desirable fit, same p_value observed just as expected
+
+
+fit_11 <- fa(newdf[,-c(1,6,9)] , nfactors=2, n.obs=392,rotate="quartimax",fm="ml")
+fit_11
+fit_11$PVAL
+# We observe a p_value closer to 0.05 when using as a method ml!
+# Let us note that this methodology would have produced better results had the data been close to normality!
+# We recall that our data are nowhere near normality hence we have some indications about the poor fit!
+
+fit_12 <- fa(newdf[,-c(1,6,9)] , nfactors=2, n.obs=392,rotate="quartimax",fm="wls")
+fit_12
+fit_12$PVAL
+# Different method now, but poor  model fit
+
+fit_13 <- fa(newdf[,-c(1,6,9)] , nfactors=2, n.obs=392,rotate="quartimax",fm="gls")
+fit_13
+fit_13$PVAL
+# Another method, still a poor model fit
+
+fit_14 <- fa(newdf[,-c(1,6,9)] , nfactors=2, n.obs=392,rotate="quartimax",fm="pa")
+fit_14
+fit_14$PVAL
+# p_value equal to 0.02855784, not a great model fit either
+
+fit_15 <- fa(newdf[,-c(1,6,9)] , nfactors=2, n.obs=392,rotate="quartimax",fm="uls")
+fit_15
+fit_15$PVAL
+# p_value equal to 0.02861625, not a great model fit either
+
+fit_16 <- fa(newdf[,-c(1,6,9)] , nfactors=2, n.obs=392,rotate="quartimax",fm="minchi")
+fit_16
+fit_16$PVAL
+# Poor model fit
+
+library(Rcsdp)
+fit_17 <- fa(newdf[,-c(1,6,9)] , nfactors=2, n.obs=392,rotate="quartimax",fm="minrank")
+fit_17
+fit_17$PVAL
+# p_value equal to 0.01258349, indicating not a great fit either
+```  
+
+**Screeplots**  
+```{r}
+plot(fit_7$values, type = "b", xlim = c(1, 10))
+# We construct a scree plot to aid with the selection of the number of factors. From this plot, we see that the 
+# eigenvalues drop precipitously after factor 1 (maybe even 2)
+
+
+scree(newdf[,-c(1,6,9)], pc=FALSE)
+# Second way to provide a scree plot
+# Use pc=FALSE for factor analysis
+
+
+fa.parallel(newdf[,-c(1,6,9)], fa="fa")
+# The eigenvalue method (“Kaiser’s rule”) is telling us that 3 factors may be best. Parallel analysis is revealing
+# only two factors
+```  
+**Plot of the (new) scores using as label the class (via the ml method)**  
+```{r}
+scores_2 <- factanal(newdf[,-c(1,6,9)], 3,
+                   rotation="varimax",
+                   scores = "regression", method="ml")
+
+fa.plot(scores_2$scores, labels=newdf[,-c(1,6,9)]$Class, pch=18, cex=0.3)
+```  
+**Final suggestion**
+```{r}
+fit_11
+# We notice that the 1st factor explains the 23% of the total variability while having 2 factors the percentage of the total variability explained increases to 40%! Note that we wanted to have as few factors as possible! (Should we have more than 2 we wouldn’t have made a big difference in comparison to the initial variables!) We also observe that this model has loadings that are as closer to simple structure (in comparison with the previous models explored)! Moreover, the fit is close to being acceptable (should we decrease the significance level the confidence interval would get wider , thus we would have an acceptable fit!). As regards the loadings now, for the first factor: λ11=0.84, λ21=0.11, λ31=0.23, λ41=0.69, λ51= 0.19 and λ61=0.35. As regards the second factor: λ12=0.13, λ22=0.92, λ32=0.23, λ42=0.02, λ52=-0.03, λ62=0.29. Last but not least, maybe we could try some transformation (get closer to normality if possible!), or an imputed dataset so as to obtain better results!
+``` 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
